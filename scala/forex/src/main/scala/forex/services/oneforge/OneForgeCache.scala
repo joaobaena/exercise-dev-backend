@@ -2,6 +2,7 @@ package forex.services.oneforge
 
 import forex.config.OneForgeCacheConfig
 import forex.domain.Rate
+import forex.services.oneforge.RefOneForgeCache.CacheContent
 import zio._
 
 import java.time.{OffsetDateTime, ZoneOffset}
@@ -25,6 +26,10 @@ final case class RefOneForgeCache(config: OneForgeCacheConfig, clock: Clock, ref
     }.flatMap(rates => ZIO.fromOption(rates.find(_.pair == pair)).orElseFail(OneForgeError.MissingPair(pair)))
 }
 
+object RefOneForgeCache {
+  final case class CacheContent(rates: List[Rate], lastUpdatedAt: OffsetDateTime)
+}
+
 object OneForgeCache {
 
   def live: URLayer[OneForgeCacheConfig, OneForgeCache] =
@@ -36,5 +41,3 @@ object OneForgeCache {
       } yield RefOneForgeCache(config, clock, ref)
     }
 }
-
-final case class CacheContent(rates: List[Rate], lastUpdatedAt: OffsetDateTime)

@@ -3,7 +3,8 @@ package services.oneforge
 import forex.config.OneForgeCacheConfig
 import forex.domain.Currency._
 import forex.domain.{Price, Rate}
-import forex.services.oneforge.{CacheContent, OneForgeError, RefOneForgeCache}
+import forex.services.oneforge.RefOneForgeCache.CacheContent
+import forex.services.oneforge.{OneForgeError, RefOneForgeCache}
 import zio._
 import zio.test._
 
@@ -11,15 +12,13 @@ import java.time.OffsetDateTime
 
 object OneForgeCacheSpec extends ZIOSpecDefault {
 
-  private val pair: Rate.Pair = Rate.Pair(EUR, USD)
-  private val rate: Rate      = Rate(pair, Price(1.2345), OffsetDateTime.now())
+  private val testPair = Rate.Pair(EUR, USD)
+  private val testRate = Rate(testPair, Price(1.2345), OffsetDateTime.now())
 
   private def fetchUpdatedRates: IO[OneForgeError, List[Rate]] =
-    ZIO.succeed(List(rate))
+    ZIO.succeed(List(testRate))
 
-  private val cacheConfig: OneForgeCacheConfig = OneForgeCacheConfig(ttl = 5.minutes)
-
-  val cacheConfigLayer: ULayer[OneForgeCacheConfig] = ZLayer.succeed(cacheConfig)
+  val cacheConfig: OneForgeCacheConfig = OneForgeCacheConfig(ttl = 5.minutes)
 
   def buildCache(ref: Ref[Option[CacheContent]]) =
     (for {
@@ -31,29 +30,29 @@ object OneForgeCacheSpec extends ZIOSpecDefault {
     suite("OneForgeCacheSpec")(
       test("returns the cached rate if found") {
         for {
-          ref    <- Ref.make[Option[CacheContent]](Some(CacheContent(List(rate), OffsetDateTime.now())))
+          ref    <- Ref.make[Option[CacheContent]](Some(CacheContent(List(testRate), OffsetDateTime.now())))
           cache  <- buildCache(ref)
-          result <- cache.getOrUpdate(pair, fetchUpdatedRates)
-        } yield assertTrue(result == rate)
+          result <- cache.getOrUpdate(testPair, fetchUpdatedRates)
+        } yield assertTrue(result == testRate)
       },
       test("fetches updated rates if cache is empty") {
         for {
           ref    <- Ref.make[Option[CacheContent]](None)
           cache  <- buildCache(ref)
-          result <- cache.getOrUpdate(pair, fetchUpdatedRates)
-        } yield assertTrue(result == rate)
+          result <- cache.getOrUpdate(testPair, fetchUpdatedRates)
+        } yield assertTrue(result == testRate)
       },
       test("fetches updated rates if cache has expired") {
         val expiredTimestamp = OffsetDateTime.now().minusSeconds(cacheConfig.ttl.toSeconds + 1)
         for {
-          ref    <- Ref.make[Option[CacheContent]](Some(CacheContent(List(rate), expiredTimestamp)))
+          ref    <- Ref.make[Option[CacheContent]](Some(CacheContent(List(testRate), expiredTimestamp)))
           cache  <- buildCache(ref)
-          result <- cache.getOrUpdate(pair, fetchUpdatedRates)
-        } yield assertTrue(result == rate)
+          result <- cache.getOrUpdate(testPair, fetchUpdatedRates)
+        } yield assertTrue(result == testRate)
       },
       test("returns MissingPair error if rate not found in cache") {
         for {
-          ref        <- Ref.make[Option[CacheContent]](Some(CacheContent(List(rate), OffsetDateTime.now())))
+          ref        <- Ref.make[Option[CacheContent]](Some(CacheContent(List(testRate), OffsetDateTime.now())))
           cache      <- buildCache(ref)
           invalidPair = Rate.Pair(GBP, EUR) // Invalid pair, not in the cache
           result     <- cache.getOrUpdate(invalidPair, fetchUpdatedRates).flip

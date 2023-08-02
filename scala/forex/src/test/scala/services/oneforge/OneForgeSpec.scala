@@ -4,6 +4,7 @@ import forex.config.OneForgeConfig
 import forex.domain.{Currency, Price, Rate}
 import forex.services.oneforge.{OneForgeCache, OneForgeClient, OneForgeError}
 import forex.services.oneforge.Protocol.OneForgeRate
+import services.oneforge.OneForgeCacheSpec.cacheConfig
 import sttp.client4._
 import sttp.client4.httpclient.zio._
 import sttp.model.StatusCode
@@ -13,14 +14,13 @@ import zio.test._
 import java.time.{Instant, OffsetDateTime, ZoneOffset}
 
 object OneForgeSpec extends ZIOSpecDefault {
-  private val testRatePair = Rate.Pair(Currency.CAD, Currency.SGD)
-
-  private val oneForgeRate = OneForgeRate(1.2345, 1.2345, 1.2345, "CAD/SGD", 1690548673301L)
+  private val testPair = Rate.Pair(Currency.CAD, Currency.SGD)
+  private val testRate = OneForgeRate(1.2345, 1.2345, 1.2345, "CAD/SGD", 1690548673301L)
 
   private val configLayer: ULayer[OneForgeConfig] =
     ZLayer.succeed(OneForgeConfig("https://api.1forge.com", "YOUR_API_KEY"))
 
-  private val cacheLayer = OneForgeCacheSpec.cacheConfigLayer ++ TestClock.default >>> OneForgeCache.live
+  private val cacheLayer = ZLayer.succeed(OneForgeCacheSpec.cacheConfig) ++ TestClock.default >>> OneForgeCache.live
 
   private def buildClient(sttpClient: SttpClient) =
     (for {
@@ -31,36 +31,36 @@ object OneForgeSpec extends ZIOSpecDefault {
 
   def spec =
     suite("OneForgeClient")(
-      test("get returns the correct rate for a valid pair") {
+      test("returns the correct rate for a valid pair") {
         val sttpClient: SttpClient = HttpClientZioBackend.stub.whenAnyRequest
-          .thenRespond(Response.ok(Right(List(oneForgeRate))))
+          .thenRespond(Response.ok(Right(List(testRate))))
         for {
           client <- buildClient(sttpClient)
-          result <- client.get(testRatePair)
+          result <- client.get(testPair)
         } yield assertTrue(result == Rate(
-          Rate.Pair(testRatePair.from, testRatePair.to),
-          Price(oneForgeRate.p),
-          OffsetDateTime.ofInstant(Instant.ofEpochMilli(oneForgeRate.t), ZoneOffset.UTC)
+          Rate.Pair(testPair.from, testPair.to),
+          Price(testRate.p),
+          OffsetDateTime.ofInstant(Instant.ofEpochMilli(testRate.t), ZoneOffset.UTC)
         ))
       },
-      test("properly return deserialization errors") {
+      test("properly returns deserialization errors") {
         val sttpClient: SttpClient = HttpClientZioBackend.stub.whenAnyRequest
           .thenRespond(Response.ok("Invalid Response"))
         for {
           client <- buildClient(sttpClient)
-          result <- client.get(testRatePair).flip
+          result <- client.get(testPair).flip
         } yield result match {
           case OneForgeError.Deserialization(body, _) =>
             assertTrue(body.contains("Invalid Response"))
           case _                                      => assertTrue(false)
         }
       },
-      test("returns return http errors") {
+      test("properly returns http errors") {
         val sttpClient: SttpClient = HttpClientZioBackend.stub.whenAnyRequest
           .thenRespond(Response("Server Error", StatusCode.InternalServerError))
         for {
           client <- buildClient(sttpClient)
-          result <- client.get(testRatePair).flip
+          result <- client.get(testPair).flip
         } yield assertTrue(result == OneForgeError.Http("Server Error", 500))
 
       }

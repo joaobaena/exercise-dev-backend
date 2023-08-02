@@ -1,14 +1,14 @@
 package forex.services.oneforge
 
 import forex.config.OneForgeConfig
-
-import java.time.OffsetDateTime
 import forex.domain._
 import forex.services.oneforge.Protocol.OneForgeRate
 import sttp.client4.{basicRequest, DeserializationException, HttpError, UriContext}
 import sttp.client4.httpclient.zio.SttpClient
 import sttp.client4.ziojson.asJson
 import zio._
+
+import java.time.OffsetDateTime
 
 /** One-forge service specific client api */
 trait OneForge {
@@ -68,6 +68,5 @@ object OneForge {
     }
 
   // Dummy is not enough...
-  val dummy: ULayer[OneForge]                                                    =
-    ZLayer.succeed(DummyOneForge())
+  val dummy: ULayer[OneForge] = ZLayer.succeed(DummyOneForge())
 }
